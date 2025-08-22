@@ -1,0 +1,73 @@
+services:
+    # SQL Server service
+    sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        container_name: bookinghotel-sqlserver
+        environment:
+            SA_PASSWORD: "BookingHotel123!"
+            ACCEPT_EULA: "Y"
+            MSSQL_PID: "Express"
+        ports:
+            - "1433:1433"
+        volumes:
+            - sqlserver_data:/var/opt/mssql
+        networks:
+            - bookinghotel-network
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P BookingHotel123! -Q 'SELECT 1' -C",
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
+
+    # Migration service (runs once)
+    migration:
+        build:
+            context: .
+            dockerfile: Dockerfile.migration
+        container_name: bookinghotel-migration
+        env_file:
+            - .env.docker
+        environment:
+            - ASPNETCORE_ENVIRONMENT=Production
+        depends_on:
+            sqlserver:
+                condition: service_healthy
+        networks:
+            - bookinghotel-network
+        restart: "no"
+
+    # ASP.NET Core API service
+    api:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: bookinghotel-api
+        env_file:
+            - .env.docker
+        environment:
+            - ASPNETCORE_ENVIRONMENT=Production
+        ports:
+            - "5245:8080"
+        depends_on:
+            sqlserver:
+                condition: service_healthy
+            migration:
+                condition: service_completed_successfully
+        networks:
+            - bookinghotel-network
+        volumes:
+            - ./wwwroot:/app/wwwroot
+        restart: unless-stopped
+
+networks:
+    bookinghotel-network:
+        driver: bridge
+
+volumes:
+    sqlserver_data:
+        driver: local

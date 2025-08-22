@@ -1,0 +1,10 @@
+services:
+    api:
+        environment:
+            - ASPNETCORE_ENVIRONMENT=Development
+        volumes:
+            - ./:/app/src
+            - ./wwwroot:/app/wwwroot
+        ports:
+            - "5245:8080"
+            - "5246:8081" # HTTPS port if needed
