@@ -2,7 +2,7 @@ namespace be.Constants
 {
     public static class AppConstants
     {
-        public const string AvatarUrl = "https://booking-api.hau.io.vn/images/avatars/avatar-default.jpg";
+        public const string AvatarUrl = "/images/avatars/avatar-default.jpg";
     }
 
     public static class UserRoles
