@@ -1,0 +1,1568 @@
+{
+  "name": "AI Assistant Booking Hotel copy",
+  "nodes": [
+    {
+      "parameters": {
+        "functionCode": "const msg = $json.message || {};\nconst chatInput = (msg.text || '').trim();\nconst chatId = msg.chat && msg.chat.id ? msg.chat.id : '';\n\nconst hasVoice = !!msg.voice;\nlet voiceFileId = '';\n\nif (msg.voice && msg.voice.file_id) {\n  voiceFileId = msg.voice.file_id;\n}\n\nconst key = 876;\n\nreturn [{\n  json: {\n    chatId,\n    chatInput,\n    hasVoice,\n    voiceFileId,\n    key,\n    original: $json\n  }\n}];\n"
+      },
+      "id": "8797d102-5b67-4357-8351-f288eaadcca1",
+      "name": "Parse Input1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -336,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json[\"hasVoice\"]}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "a50ec926-00e0-4586-9acd-071a9982043b",
+      "name": "IF Voice?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -144,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "chatId",
+              "value": "={{$json[\"chatId\"]}}"
+            },
+            {
+              "name": "chatInput",
+              "value": "={{$json[\"chatInput\"]}}"
+            },
+            {
+              "name": "sessionId",
+              "value": "={{ $execution.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e2cf8442-2f3b-404d-8e7b-9dd342c79167",
+      "name": "Normalize Text1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        64,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        240,
+        768
+      ],
+      "id": "781e3032-1dfe-4222-bbbc-a12d995b3766",
+      "name": "Speech To Text1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "7Pg1hl5UmOTc85au",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const item = $json;\nconst parts = item.content?.parts || [];\nconst fullText = parts.map(p => p.text).join(\" \");\nconst chatId = $node[\"Telegram Trigger\"].json?.message?.chat?.id || null;\n\nif (!chatId) {\n  throw new Error(\"chatId not found in Telegram Trigger node\");\n}\n\nreturn [\n  {\n    json: {\n      chatInput: fullText,\n      chatId: chatId\n    }\n  }\n];\n"
+      },
+      "id": "134a57e1-c131-46e0-8aca-bde01cc08db6",
+      "name": "Combine Text1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        400,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.voiceFileId }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        64,
+        768
+      ],
+      "id": "eb59e140-e5a3-4239-98da-a78b080da083",
+      "name": "Get Audio Message1",
+      "webhookId": "995da2ce-f12d-43de-b8de-eb8a6255ba7e",
+      "credentials": {
+        "telegramApi": {
+          "id": "bv7bXOks6uQDNbRq",
+          "name": "Telegram AI Assistant"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "=You are an intent classifier for Vietnamese hotel booking system.\n\n**TASK:** Analyze the user message and return ONLY the intent classification.\n\n**INTENTS:**\n- **search_rooms**: Tìm/tìm kiếm phòng khách sạn (location, dates, price, amenities)\n- **search_locations**: Tìm/xem danh sách địa điểm/thành phố có sẵn\n- **room_details**: Xem thông tin chi tiết phòng cụ thể (amenities, photos, description, price)\n- **booking**: Đặt phòng / xác nhận booking / thanh toán\n- **amenities_inquiry**: Hỏi về tiện ích (wifi, pool, parking, etc.)\n- **review**: Xem đánh giá / viết review / feedback\n- **greeting**: Chào hỏi / cám ơn / lịch sự\n- **goodbye**: Chào tạm biệt / kết thúc cuộc trò chuyện\n- **unknown**: Không phân loại được\n\n**INPUT:** {{ $json.chatInput }}\n\n**OUTPUT FORMAT:**\nReturn ONLY one word - the intent name. No explanations. No JSON. Just the intent.\n\n**Examples:**\n- \"Tôi muốn tìm phòng ở Đà Nẵng\" → search_rooms\n- \"Có những địa điểm nào?\" → search_locations\n- \"Phòng 123 có gì?\" → room_details\n- \"Đặt phòng này\" → booking\n- \"Có wifi không?\" → amenities_inquiry\n- \"Xem đánh giá phòng 123\" → review\n- \"Chào bạn\" → greeting\n- \"Cám ơn, tạm biệt\" → goodbye\n- \"Làm bánh mì, ạksdadsad\" → unknown\n\n**CLASSIFICATION RULES:**\n- If user asks about FINDING/SEARCHING rooms → search_rooms\n- If user asks about AVAILABLE locations/cities → search_locations  \n- If user asks DETAILS about a specific room → room_details\n- If user asks about room availability on specific dates → check_availability\n- If user wants to BOOK/RESERVE/PAY → booking\n- If user asks about FACILITIES/AMENITIES → amenities_inquiry\n- If user wants to READ/WRITE reviews → review\n- If user says HELLO/HI/THANKS → greeting\n- If user says BYE/GOODBYE → goodbye\n- If unclear or unrelated to hotel booking → unknown"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        256,
+        992
+      ],
+      "id": "00b14e69-65d9-44b3-a40f-38fbc2e6b9ec",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {
+          "maxOutputTokens": 1000,
+          "temperature": 0.1,
+          "topK": 10,
+          "topP": 0.8,
+          "safetySettings": {
+            "values": [
+              {
+                "category": "HARM_CATEGORY_HARASSMENT",
+                "threshold": "BLOCK_NONE"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        144,
+        1184
+      ],
+      "id": "88c95bbf-0610-4dcb-88b7-f1ec3c3c5672",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "7Pg1hl5UmOTc85au",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        304,
+        1184
+      ],
+      "id": "6b7a8d68-61b7-44cb-b6cb-52cf728b5adc",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "search_rooms",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "15b45604-6918-421f-9952-f9fb368af116"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "search_rooms"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a0ad3080-f9fd-48c1-b268-a230fb66c864",
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "search_locations",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "search_locations"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "42f0a387-b98d-4e33-bb31-80eaeded65fe",
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "room_details",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "room_details"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f92c465f-17f2-4fd8-9524-f0633e6bb872",
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "booking",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "booking"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d7bca1d7-bb1f-4337-bd6a-ce46443f44fe",
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "amenities_inquiry",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "amenities_inquiry"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "58169a45-048b-4d6a-a948-d0dd279e660e",
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "review",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "review"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6a5318c0-b716-42d8-b3ff-ca074062614e",
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "greeting",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "greeting"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2b6c8d44-dd6e-41e4-8c43-ac55dffbdf6e",
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "goodbye",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "goodbye"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ab8ccade-91c8-4299-9c6c-3073c90a24d7",
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "unknown",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Unknown"
+            }
+          ]
+        },
+        "options": {
+          "allMatchingOutputs": true
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        672,
+        848
+      ],
+      "id": "73ee584e-5b8a-45fc-a610-1bb05258e143",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "=Xin chào 👋. \nTôi là trợ lý đặt phòng khách sạn của BookingHotel 🤖.\nTôi chưa hiểu ý định của bạn 🤔❓.\nNếu có thể, tôi sẽ giúp bạn tìm phòng, xem chi tiết phòng hoặc đặt phòng ngay bây giờ nhé 😊. \nBạn muốn tôi hỗ trợ điều gì? Đừng ngần ngại hỏi nhé 😁\"",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "b96d66c9-5d4b-4dcd-84e5-2533e4256726",
+      "name": "Send Telegram1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1712
+      ],
+      "webhookId": "ed06eddd-9801-4c9e-9a54-7f57b1e3cbc8",
+      "credentials": {
+        "telegramApi": {
+          "id": "7bYHtcv44XLPfYZF",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatId = $node[\"Telegram Trigger1\"].json?.message?.chat?.id || null;\nif (!chatId) {\nthrow new Error(\"chatId not found in Telegram Trigger node\");\n}\n\nreturn [{\njson: {\nchatId,\n}\n}];"
+      },
+      "id": "ede90f36-09ef-4f4e-a534-1aad8e7763eb",
+      "name": "Shape AI Output2",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        928,
+        1712
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "9d735b07-0064-46d5-b4b5-19068950bff1",
+      "name": "Send Telegram3",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        144
+      ],
+      "webhookId": "bc280ea9-f04b-48c6-978e-495e55c52fe9",
+      "credentials": {
+        "telegramApi": {
+          "id": "bv7bXOks6uQDNbRq",
+          "name": "Telegram AI Assistant"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatId = $node[\"Telegram Trigger1\"].json?.message?.chat?.id || null;\nif (!chatId) {\n  throw new Error(\"chatId not found in Telegram Trigger node\");\n}\n\nconst rooms = $node[\"Get Rooms\"].json?.content || [];\n\n// Format giá ngắn gọn\nconst formatPrice = (price) => {\n  if (price >= 1000000) return `${(price/1000000).toFixed(1)}M`;\n  if (price >= 1000) return `${(price/1000).toFixed(0)}K`;\n  return price.toString();\n};\n\n// Limit số phòng hiển thị (tránh quá dài)\nconst maxRooms = 20;\nconst displayRooms = rooms.slice(0, maxRooms);\n\nlet roomText = \"🏠 **DANH SÁCH PHÒNG**\\n\\n\";\n\nif (displayRooms.length > 0) {\n  roomText += displayRooms.map((room, idx) => {\n    // Rút gọn amenities\n    const amenities = [];\n    if (room.wifi) amenities.push(\"📶\");\n    if (room.airConditioner) amenities.push(\"❄️\");\n    if (room.tv) amenities.push(\"📺\");\n    if (room.kitchen) amenities.push(\"🍳\");\n    \n    return `**${idx + 1}. ${room.name}**\\n` +\n           `💰 ${formatPrice(room.price)} VND • 🛏️ ${room.bedRoom}PN-${room.bed}G\\n` +\n           `${amenities.join(\"\")} • ${room.location ? room.location.province : \"N/A\"}`;\n  }).join(\"\\n\\n\");\n  \n  if (rooms.length > maxRooms) {\n    roomText += `\\n\\n... và ${rooms.length - maxRooms} phòng khác`;\n  }\n  \n} else {\n  roomText += \"❌ Không có phòng nào.\";\n}\n\nroomText += `\\n\\n💡 Gõ \"Phòng [tên]\" để xem chi tiết`;\n\nreturn [{\n  json: {\n    chatId,\n    text: roomText\n  }\n}];"
+      },
+      "id": "fc7beb5c-3a12-4628-9076-6dd77497e55f",
+      "name": "Shape AI Output3",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1136,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://booking-api.hau.io.vn/api/locations",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        944,
+        352
+      ],
+      "id": "5915c48f-accd-4b4c-93f4-5288d51b81d5",
+      "name": "Get Locations"
+    },
+    {
+      "parameters": {
+        "url": "https://booking-api.hau.io.vn/api/rooms",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        944,
+        144
+      ],
+      "id": "ec9987a3-770f-4a3a-ae07-75ca4b95b014",
+      "name": "Get Rooms"
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "=📷Ảnh mô tả📷\n{{ $json.photo }}\n\n{{ $json.caption }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "c0941ba8-aafc-41b7-a0fa-5cdc526b69f3",
+      "name": "Send Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        352
+      ],
+      "webhookId": "5cd65276-1295-4640-a64c-8e1112264d1f",
+      "credentials": {
+        "telegramApi": {
+          "id": "bv7bXOks6uQDNbRq",
+          "name": "Telegram AI Assistant"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatId = $node[\"Telegram Trigger1\"].json?.message?.chat?.id || null;\nif (!chatId) {\n  throw new Error(\"chatId not found in Telegram Trigger node\");\n}\n\nconst locations = $node[\"Get Locations\"].json?.content || [];\n\nif (locations.length === 0) {\n  return [{\n    json: {\n      chatId,\n      text: \"❌ Không tìm thấy địa điểm nào.\",\n      parse_mode: \"Markdown\"\n    }\n  }];\n}\n\nconst maxLocations = 15;\nconst displayLocations = locations.slice(0, maxLocations);\n\n// Tìm location đầu tiên có ảnh để làm ảnh đại diện\nconst locationWithImage = displayLocations.find(loc => loc.image && loc.image.trim() !== \"\");\n\n// Tạo text content\nlet locationText = `📍 **DANH SÁCH ĐỊA ĐIỂM KHẢ DỤNG**\\n\\n`;\nlocationText += `Tìm thấy ${locations.length} địa điểm:\\n\\n`;\n\nlocationText += displayLocations.map((location, idx) => {\n  const hasImage = location.image && location.image.trim() !== \"\" ? \"🖼️\" : \"🏞️\";\n  \n  return `${hasImage} **${idx + 1}. ${location.name}**\\n` +\n         `   🏛️ ${location.province}, ${location.country}`;\n}).join(\"\\n\\n\");\n\nlocationText += `\\n\\n💡 Gõ \"Tìm phòng ở [tên địa điểm]\" để xem chi tiết`;\n\n// Gửi với ảnh đại diện nếu có\nif (locationWithImage) {\n  return [{\n    json: {\n      chatId,\n      photo: locationWithImage.image.startsWith('http') ? locationWithImage.image : `https://booking-api.hau.io.vn${locationWithImage.image}`,\n      caption: locationText,\n      parse_mode: \"Markdown\"\n    }\n  }];\n} else {\n  return [{\n    json: {\n      chatId,\n      text: locationText\n    }\n  }];\n}"
+      },
+      "id": "f6a02c79-0e41-4b2a-94d1-f612689c2d47",
+      "name": "Shape AI Output4",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "4a264e99-cb6d-4574-91fb-652cb310e73a",
+      "name": "Telegram Trigger1",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        -592,
+        880
+      ],
+      "webhookId": "97be3b35-cd24-4556-82a2-f42faee89929",
+      "credentials": {
+        "telegramApi": {
+          "id": "7bYHtcv44XLPfYZF",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "=Xin chân thành cảm ơn bạn đã liên hệ với chúng tôi 💕. \nSự tin tưởng của bạn là động lực để chúng tôi không ngừng cải thiện chất lượng dịch vụ ❤️.",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "85a3457b-fe33-4f05-8be4-ac3a17496ce1",
+      "name": "Send Telegram5",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1344
+      ],
+      "webhookId": "ed06eddd-9801-4c9e-9a54-7f57b1e3cbc8",
+      "credentials": {
+        "telegramApi": {
+          "id": "bv7bXOks6uQDNbRq",
+          "name": "Telegram AI Assistant"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatId = $node[\"Telegram Trigger1\"].json?.message?.chat?.id || null;\nif (!chatId) {\nthrow new Error(\"chatId not found in Telegram Trigger node\");\n}\n\nreturn [{\njson: {\nchatId,\n}\n}];"
+      },
+      "id": "4bcd7e3b-e617-4f07-83eb-f48b6bb39090",
+      "name": "Shape AI Output7",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        928,
+        1344
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "={{ $json.commentText }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "8691a6e4-56b2-4c15-88fc-bcd692ebda4e",
+      "name": "Send Telegram6",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        1152
+      ],
+      "webhookId": "5cd65276-1295-4640-a64c-8e1112264d1f",
+      "credentials": {
+        "telegramApi": {
+          "id": "bv7bXOks6uQDNbRq",
+          "name": "Telegram AI Assistant"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatId = $node[\"Telegram Trigger1\"].json?.message?.chat?.id || null;\n\nif (!chatId) {\n  throw new Error(\"chatId not found in Telegram Trigger node\");\n}\n\nconst comments = $node[\"Get Reviews\"].json?.content || [];\n\n// Format comments\nlet commentText = \"💬 *Danh sách bình luận:*\\n\\n\";\nif (comments.length > 0) {\n  commentText += comments.map((c, idx) => {\n    const userName = c.user?.name || \"Ẩn danh\";\n    const rating = \"⭐\".repeat(c.rating) || \"Chưa đánh giá\";\n    const date = new Date(c.createdAt).toLocaleDateString(\"vi-VN\");\n    return `*${idx + 1}. ${userName}* (${date})\\n${rating}\\n\"${c.content}\"\\n`;\n  }).join(\"\\n\");\n} else {\n  commentText += \"Chưa có bình luận nào.\";\n}\n\nreturn [{\n  json: {\n    chatId,\n    commentText,\n  }\n}];\n"
+      },
+      "id": "534a19b7-a38a-44be-abcd-dcca48c38afe",
+      "name": "Shape AI Output8",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1152
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://booking-api.hau.io.vn/api/comments",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        928,
+        1152
+      ],
+      "id": "83057597-3307-4150-8dda-07a8333f9cbc",
+      "name": "Get Reviews"
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "=Xin chào 👋. \nTôi là trợ lý đặt phòng khách sạn của BookingHotel 🤖.\nNếu có thể, tôi sẽ giúp bạn tìm phòng, xem chi tiết phòng hoặc đặt phòng ngay bây giờ nhé 😊. \nBạn muốn tôi hỗ trợ điều gì? Đừng ngần ngại hỏi nhé 😁\"",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "5768f5a0-d448-41ba-adce-96e573020bfa",
+      "name": "Send Telegram2",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1520
+      ],
+      "webhookId": "ed06eddd-9801-4c9e-9a54-7f57b1e3cbc8",
+      "credentials": {
+        "telegramApi": {
+          "id": "bv7bXOks6uQDNbRq",
+          "name": "Telegram AI Assistant"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatId = $node[\"Telegram Trigger1\"].json?.message?.chat?.id || null;\nif (!chatId) {\nthrow new Error(\"chatId not found in Telegram Trigger node\");\n}\n\nreturn [{\njson: {\nchatId,\n}\n}];"
+      },
+      "id": "82cd346f-cc6b-432e-9103-90a4d36ccdd6",
+      "name": "Shape AI Output",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        928,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "=You are a room information finder for Vietnamese hotel booking system.\n\n**AVAILABLE TOOLS:**\n- get_all_rooms: Get complete list of all available rooms with details\n\n**TASK:** \n1. Get all rooms using the tool\n2. Extract room ID from user's message\n3. Find matching room in the list\n4. Return complete room information in API format\n\n**INPUT MESSAGE:** {{ $json.chatInput }}\n\n**PROCESS:**\n1. First, call get_all_rooms tool to get room database\n2. Extract room ID from user message using these patterns:\n   - \"phòng 123\" → look for room with ID \"123\"\n   - \"room A01\" → look for room with ID \"A01\" \n   - \"phòng VIP-5\" → look for room with ID \"VIP-5\"\n   - \"ID: 12345\" → look for room with ID \"12345\"\n   - \"mã phòng DEL001\" → look for room with ID \"DEL001\"\n\n3. Search in rooms list by:\n   - Exact ID match\n   - Room number match\n   - Room code match\n   - Room name contains the identifier\n\n**OUTPUT FORMAT:**\nIf room found, return in API format:\n```json\n{\n  \"status\": \"found\",\n  \"extracted_id\": \"user_input_id\",\n  \"room\": {\n    \"id\": \"room_id\",\n    \"name\": \"room_name\",\n    \"bedRoom\": number of bedroom,\n    \"bed\": number of bed,\n    \"bathRoom\": number of bathroom,\n    \"description\": \"room_description\",\n    \"price\": price,\n    \"washingMachine\": true or false,\n    \"balcony\": true or false,\n    \"tv\": true or false,\n    \"airConditioner\": true or false,\n    \"wifi\": true or false,\n    \"kitchen\": true or false,\n    \"parking\": true or false,\n    \"swimmingPool\": true or false,\n    \"locationId\": \"location_uuid\",\n    \"picture\": \"image_url\",\n    \"createdAt\": \"datetime\",\n    \"updatedAt\": \"datetime\",\n    \"location\": {\n      \"id\": \"location_uuid\",\n      \"name\": \"location_name\",\n      \"province\": \"province_name\",\n      \"country\": \"Vietnam\",\n      \"image\": \"location_image_url\",\n      \"createdAt\": \"2025-09-04T03:17:02.041Z\",\n      \"updatedAt\": \"2025-09-04T03:17:02.041Z\"\n    }\n  }\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1184,
+        544
+      ],
+      "id": "2efbb1a9-a1f6-460a-876e-0d426ca30a3a",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "options": {
+          "maxOutputTokens": 1000,
+          "temperature": 0.1,
+          "topK": 10,
+          "topP": 0.8,
+          "safetySettings": {
+            "values": [
+              {
+                "category": "HARM_CATEGORY_HARASSMENT",
+                "threshold": "BLOCK_NONE"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        736
+      ],
+      "id": "cf4bde63-2d34-415b-bdd8-b65561133765",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "7Pg1hl5UmOTc85au",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "=📷 Hình ảnh phòng 📷\n{{ $json.photo }}\n\n{{ $json.caption }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "76bdc3e4-d090-4c56-87d4-0eef3d30a5d6",
+      "name": "Send Telegram4",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1696,
+        544
+      ],
+      "webhookId": "5cd65276-1295-4640-a64c-8e1112264d1f",
+      "credentials": {
+        "telegramApi": {
+          "id": "bv7bXOks6uQDNbRq",
+          "name": "Telegram AI Assistant"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatId = $node[\"Telegram Trigger1\"].json?.message?.chat?.id || null;\nif (!chatId) {\n  throw new Error(\"chatId not found in Telegram Trigger node\");\n}\n\n// Lấy thông tin phòng từ AI Agent\nconst aiOutput = $node[\"AI Agent1\"].json?.output || \"\";\n\n// Parse JSON từ output (vì AI trả về trong code block)\nlet roomData;\ntry {\n  // Extract JSON từ markdown code block\n  const jsonMatch = aiOutput.match(/```json\\n([\\s\\S]*?)\\n```/);\n  if (jsonMatch) {\n    roomData = JSON.parse(jsonMatch[1]);\n  } else {\n    roomData = JSON.parse(aiOutput);\n  }\n} catch (error) {\n  return [{\n    json: {\n      chatId,\n      text: \"Lỗi xử lý dữ liệu phòng. Vui lòng thử lại.\"\n    }\n  }];\n}\n\n// Kiểm tra status\nif (roomData.status !== \"found\") {\n  return [{\n    json: {\n      chatId,\n      text: roomData.message || \"Không tìm thấy thông tin phòng.\"\n    }\n  }];\n}\n\nconst room = roomData.room;\nconst location = room.location;\n\n// Format giá tiền\nconst formatPrice = (price) => {\n  return new Intl.NumberFormat('vi-VN', {\n    style: 'currency',\n    currency: 'VND'\n  }).format(price);\n};\n\n// Format amenities\nconst amenities = [];\nif (room.washingMachine) amenities.push(\"🧺 Máy giặt\");\nif (room.balcony) amenities.push(\"🏢 Ban công\");\nif (room.tv) amenities.push(\"📺 TV\");\nif (room.airConditioner) amenities.push(\"❄️ Điều hòa\");\nif (room.wifi) amenities.push(\"📶 Wifi\");\nif (room.kitchen) amenities.push(\"🍳 Nhà bếp\");\nif (room.parking) amenities.push(\"🚗 Chỗ đậu xe\");\nif (room.swimmingPool) amenities.push(\"🏊 Hồ bơi\");\n\nconst amenitiesText = amenities.length > 0 ? amenities.join(\"\\n\") : \"Không có tiện ích đặc biệt\";\n\n// Tạo message hiển thị\nconst message = `🏨 **THÔNG TIN PHÒNG**\n\n📌 **Tên phòng:** ${room.name}\n🆔 **ID:** ${room.id}\n\n🛏️ **Thông tin phòng:**\n- Phòng ngủ: ${room.bedRoom}\n- Giường: ${room.bed} \n- Phòng tắm: ${room.bathRoom}\n\n💰 **Giá:** ${formatPrice(room.price)}/đêm\n\n📝 **Mô tả:**\n${room.description}\n\n🎯 **Tiện ích:**\n${amenitiesText}\n\n📍 **Địa điểm:**\n- Tên: ${location.name}\n- Tỉnh/Thành: ${location.province}\n- Quốc gia: ${location.country}\n\n🕐 **Thời gian:**\n- Tạo: ${new Date(room.createdAt).toLocaleString('vi-VN')}\n- Cập nhật: ${new Date(room.updatedAt).toLocaleString('vi-VN')}`;\n\n// Kiểm tra có ảnh hay không và trả về response phù hợp\nif (room.picture && room.picture.trim() !== \"\") {\n  // Có ảnh - gửi photo với caption\n  return [{\n    json: {\n      chatId,\n      photo: room.picture.startsWith('http') ? room.picture : `https://booking-api.hau.io.vn${room.picture}`,\n      caption: message,\n      parse_mode: \"Markdown\"\n    }\n  }];\n} else {\n  // Không có ảnh - chỉ gửi text\n  return [{\n    json: {\n      chatId,\n      text: message,\n      parse_mode: \"Markdown\"\n    }\n  }];\n}"
+      },
+      "id": "a8446f3a-d3e7-4344-b246-3eef70a6f998",
+      "name": "Shape AI Output5",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://booking-api.hau.io.vn/api/rooms",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1328,
+        736
+      ],
+      "id": "6096914b-2750-405a-8554-befc85f8e08a",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatInput = $node[\"Normalize Text1\"].json?.chatInput || null;\n\nif (!chatInput) {\nthrow new Error(\"chatInput not found in Normalize Text1 node\");\n}\n\nreturn [{\njson: {\nchatInput\n}\n}];"
+      },
+      "id": "fe9ad1e3-e7f4-425c-8a44-e7566efb74b5",
+      "name": "Shape AI Output6",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        944,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c194d40d-8a20-4d9e-96c6-74254fbc61a0",
+              "leftValue": "={{ $json.chatInput }}",
+              "rightValue": "User ID",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "cbd0606b-30a5-4606-98b5-ae73870b2258",
+              "leftValue": "={{ $json.chatInput }}",
+              "rightValue": "Ngày nhận phòng",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "fff9c407-b445-4ab0-badf-6b9d91e9157e",
+              "leftValue": "={{ $json.chatInput }}",
+              "rightValue": "Ngày trả phòng",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "776d6e35-33ae-44dc-ab67-56f8104fc66c",
+              "leftValue": "={{ $json.chatInput }}",
+              "rightValue": "Room ID",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1152,
+        928
+      ],
+      "id": "ae34d530-f5ed-4ecd-9c23-d60a68055e01",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatInput = $node[\"Normalize Text1\"].json?.chatInput || null;\n\nif (!chatInput) {\nthrow new Error(\"chatInput not found in Normalize Text1 node\");\n}\n\nreturn [{\njson: {\nchatInput\n}\n}];"
+      },
+      "id": "f7caed32-10e9-4eaf-b2ae-ec9ce7a68a1b",
+      "name": "Shape AI Output9",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        944,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "=Vui lòng điền đủ thông tin để đặt phòng:\n🏠 Room ID:\n🆔 User ID:\n👤 Họ tên: \n📞 Số điện thoại:\n👯 Số lượng khách:\n📅 Ngày nhận phòng:\n📅 Ngày trả phòng:\n",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "95e2f48c-3d6d-4caa-bb77-1afe6a2d6dbc",
+      "name": "Send Telegram7",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        1040
+      ],
+      "webhookId": "bc280ea9-f04b-48c6-978e-495e55c52fe9",
+      "credentials": {
+        "telegramApi": {
+          "id": "bv7bXOks6uQDNbRq",
+          "name": "Telegram AI Assistant"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatId = $node[\"Telegram Trigger1\"].json?.message?.chat?.id || null;\nif (!chatId) {\n  throw new Error(\"chatId not found in Telegram Trigger node\");\n}\n\nreturn [{\n  json: {\n    chatId\n  }\n}];"
+      },
+      "id": "85597897-69fd-471d-8e93-b0908e34dfb3",
+      "name": "Shape AI Output10",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1472,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://booking-api.hau.io.vn/api/bookings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "roomId",
+              "value": "={{ $json.roomId }}"
+            },
+            {
+              "name": "checkInDate",
+              "value": "={{ $json.checkInDate }}"
+            },
+            {
+              "name": "checkOutDate",
+              "value": "={{ $json.checkOutDate }}"
+            },
+            {
+              "name": "guestCount",
+              "value": "={{ $json.guestCount }}"
+            },
+            {
+              "name": "userId",
+              "value": "={{ $json.userId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        880
+      ],
+      "id": "7a27dc76-7e26-4f1b-9703-c11ea020c326",
+      "name": "Create Booking",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "vz5UbSZCCiJkk5Dm",
+          "name": "Bearer Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatInput = $node[\"Normalize Text1\"].json?.chatInput || null;\n\nif (!chatInput) {\n  throw new Error(\"chatInput not found in Normalize Text1 node\");\n}\n\n// Tách từng dòng\nconst lines = chatInput.split(\"\\n\").map(l => l.trim()).filter(Boolean);\n\nlet booking = {};\n\n// Mapping từ text sang field\nlines.forEach(line => {\n  if (line.startsWith(\"Room ID:\")) {\n    booking.roomId = line.replace(\"Room ID:\", \"\").trim();\n  }\n  if (line.startsWith(\"User ID:\")) {\n    booking.userId = line.replace(\"User ID:\", \"\").trim();\n  }\n  if (line.startsWith(\"Số lượng khách:\")) {\n    booking.guestCount = parseInt(line.replace(\"Số lượng khách:\", \"\").trim(), 10);\n  }\n  if (line.startsWith(\"Ngày nhận phòng:\")) {\n    booking.checkInDate = new Date(line.replace(\"Ngày nhận phòng:\", \"\").trim()).toISOString();\n  }\n  if (line.startsWith(\"Ngày trả phòng:\")) {\n    booking.checkOutDate = new Date(line.replace(\"Ngày trả phòng:\", \"\").trim()).toISOString();\n  }\n});\n\n// Trả về JSON cho HTTP Request Node\nreturn [{\n  json: booking\n}];\n"
+      },
+      "id": "282a9f4b-1ba1-4271-a5cc-456b9e7200f5",
+      "name": "Shape AI Output11",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1472,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e10495b2-43fe-4cf2-b958-3974486e7aff",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 201,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1888,
+        880
+      ],
+      "id": "ae7d34ee-1963-47a5-8c05-6b7ca02c62af",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "=Đặt phòng thất bại 😟☹️.\nVui lòng check lại thông tin nhập vào !!\nHoặc đã có lỗi xảy ra ở hệ thống ☹️",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "9c82bb47-84da-4097-9807-be80e64c7580",
+      "name": "Send Telegram8",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        2272,
+        1008
+      ],
+      "webhookId": "bc280ea9-f04b-48c6-978e-495e55c52fe9",
+      "credentials": {
+        "telegramApi": {
+          "id": "bv7bXOks6uQDNbRq",
+          "name": "Telegram AI Assistant"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatId = $node[\"Telegram Trigger1\"].json?.message?.chat?.id || null;\nif (!chatId) {\n  throw new Error(\"chatId not found in Telegram Trigger node\");\n}\n\nreturn [{\n  json: {\n    chatId\n  }\n}];"
+      },
+      "id": "f44c67bd-926d-4c6b-9c1c-11fabca313cb",
+      "name": "Shape AI Output12",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        1008
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "=Đã đặt phòng thành công 😊💕.\nVui lòng check trang booking để xem chi tiết booking ✅.\nCảm ơn quý khách đã tin tưởng dịch vụ của chúng tôi 🤗.",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "6ea3bdbb-7332-4774-80e7-6404bd05353c",
+      "name": "Send Telegram9",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        2272,
+        816
+      ],
+      "webhookId": "bc280ea9-f04b-48c6-978e-495e55c52fe9",
+      "credentials": {
+        "telegramApi": {
+          "id": "bv7bXOks6uQDNbRq",
+          "name": "Telegram AI Assistant"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const chatId = $node[\"Telegram Trigger1\"].json?.message?.chat?.id || null;\nif (!chatId) {\n  throw new Error(\"chatId not found in Telegram Trigger node\");\n}\n\nreturn [{\n  json: {\n    chatId\n  }\n}];"
+      },
+      "id": "ba13d892-d1b1-466e-93fd-074091cec22f",
+      "name": "Shape AI Output13",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        816
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Parse Input1": {
+      "main": [
+        [
+          {
+            "node": "IF Voice?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Voice?1": {
+      "main": [
+        [
+          {
+            "node": "Get Audio Message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Normalize Text1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Text1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Speech To Text1": {
+      "main": [
+        [
+          {
+            "node": "Combine Text1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Text1": {
+      "main": [
+        [
+          {
+            "node": "Normalize Text1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Audio Message1": {
+      "main": [
+        [
+          {
+            "node": "Speech To Text1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape AI Output2": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Get Rooms",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Locations",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Shape AI Output6",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Shape AI Output9",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Rooms",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Shape AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Shape AI Output7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Shape AI Output2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape AI Output3": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Locations": {
+      "main": [
+        [
+          {
+            "node": "Shape AI Output4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Rooms": {
+      "main": [
+        [
+          {
+            "node": "Shape AI Output3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape AI Output4": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Parse Input1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape AI Output7": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape AI Output8": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Reviews": {
+      "main": [
+        [
+          {
+            "node": "Shape AI Output8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape AI Output": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape AI Output5": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Shape AI Output5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape AI Output6": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram": {
+      "main": [
+        []
+      ]
+    },
+    "Shape AI Output9": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape AI Output10": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Shape AI Output11",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Shape AI Output10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape AI Output11": {
+      "main": [
+        [
+          {
+            "node": "Create Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Booking": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape AI Output12": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Shape AI Output13",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Shape AI Output12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape AI Output13": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "adda5af0-0d71-4137-841c-9b2ac3d20781",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "86903205aaefc2b13b52a1f305d6cf87253f5f12bb60f477c3179601bdfa1a79"
+  },
+  "id": "aqP97WVf2950jiKF",
+  "tags": []
+}
